@@ -1,21 +1,29 @@
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 void menu();
-void get_paths(int regime, char** catalog, char** filename);
+void get_paths(int regime, char** catalog, char** file_path, char** file_name);
+char* get_fullname(char* file_path, char* file_name);
 void get_strings(char** orig);
-void write_file(FILE* file, char* filename);
+void processing(char* catalog, char* filename, void (*operation)(char*, char*));
+void write_file(char* list, char* filename);
+void read_file(char* catalog, char* list, char* filename);
 
 int main() {
   menu();
   return 0;
 }
 
+// меню
 void menu() {
-  system("clear");
-  char* catalog = "";
-  char* filename = "";
+  // system("clear");
+  char* catalog = "\0";
+  char* file_path = "\0";
+  char* file_name = "\0";
+  char* listname = "\0";
+  printf("%s\n", OpenSSL_version(OPENSSL_VERSION));
   printf(
       "Выберите режим работы утилиты, введя число ниже:\n1. Постановка "
       "каталога на контроль целостности.\n2. Проведение контроля целостности "
@@ -23,25 +31,31 @@ void menu() {
   int regime = 0;
   scanf("%d", &regime);
   getchar();  // захват символа переноса строки после выбора в меню
+  // если ввели букву или неверное число
   while (regime != 1 && regime != 2) {
     printf("Выберите верную опцию: 1 или 2\n");
     scanf("%d", &regime);
     getchar();
   }
+  get_paths(regime, &catalog, &file_path, &file_name);
+  listname = get_fullname(file_path, file_name);
   switch (regime) {
     case 1:
-      get_paths(regime, &catalog, &filename);
-
+      if (catalog && listname) {
+        processing(catalog, listname, write_file);
+      }
       break;
     case 2:
-    get_paths(regime, &catalog, &filename);
       break;
   }
   free(catalog);
-  free(filename);
+  free(listname);
+  free(file_name);
+  free(file_path);
 }
 
-void get_paths(int regime, char** catalog, char** filename) {
+// запрос и получение директорий
+void get_paths(int regime, char** catalog, char** file_path, char** file_name) {
   if (regime == 1) {
     printf(
         "Введите абсолютный путь до каталога для постановки на контроль "
@@ -51,7 +65,7 @@ void get_paths(int regime, char** catalog, char** filename) {
         "Введите абсолютный путь до каталога для проведения контроля "
         "целостности:\n");
   }
-  *catalog = get_strings();
+  get_strings(catalog);
 
   if (regime == 1) {
     printf(
@@ -62,7 +76,22 @@ void get_paths(int regime, char** catalog, char** filename) {
         "Введите абсолютный путь до соответствующего списка контроля "
         "целостности:\n");
   }
-  *filename = get_strings();
+  get_strings(file_path);
+
+  if (regime == 1) {
+    printf("Введите название для списка контроля целостности:\n");
+  } else if (regime == 2) {
+    printf("Введите название соответствующего списка контроля целостности:\n");
+  }
+  get_strings(file_name);
+}
+
+// сборка пути до списка и его названия в 1 строку
+char* get_fullname(char* file_path, char* file_name) {
+  char* temp = malloc(sizeof(char) * (strlen(file_path) + strlen(file_name)));
+  snprintf(temp, strlen(file_path) + strlen(file_name), "%s%s", file_path,
+           file_name);
+  return temp;
 }
 
 // запрос пути до каталогов от пользователя
@@ -75,12 +104,14 @@ void get_strings(char** orig) {
     path[index] = c;
     length++;
     index++;
-    if (index + 1 == capacity) {
+    if (index == capacity) {
       capacity *= 2;
-      path = realloc(path, capacity * sizeof(char) + 1);
-      if (path == (void*)0) {
+      char* temp = realloc(path, (capacity + 1) * sizeof(char));
+      if (!path) {
         flag = 0;
         free(path);
+      } else {
+        path = temp;
       }
     }
     c = getchar();
@@ -95,13 +126,62 @@ void get_strings(char** orig) {
   }
 }
 
-void write_file(FILE* file, char* filename) { fprintf(file, "%s\n", filename); }
-
-void read_file(FILE* file, char* filename) {
-  char* line = "";
-  fscanf(file, "%s", line);
-  printf("%s %s\n", line, filename);
+// обработка каталога
+void processing(char* catalog, char* filename,
+                void (*operation)(char*, char*)) {
+  // system("clear");
+  char* command = (char*)malloc(sizeof(char) * (strlen(catalog) + 9));
+  snprintf(command, 8, "ls -XN ");
+  strcat(command, catalog);
+  FILE* pipe = popen(command, "r");  // выполнение команды в терминале
+  if (pipe != NULL) {
+    char file_path[256] = "\0";  // путь до файлов
+    // сбор строк по \n символу из pipe
+    while (fgets(file_path, sizeof(file_path), pipe) != NULL) {
+      char full_path[256] = "\0";
+      file_path[strcspn(file_path, "\n")] = '\0';  // замена \n на \0
+      strcat(full_path, catalog);
+      strcat(full_path, file_path);
+      operation(filename, full_path);
+    }
+  }
+  free(command);
+  pclose(pipe);
 }
+
+// создание контрольного списка
+void write_file(char* list, char* filename) {
+  FILE* file = fopen(list, "a");
+  fprintf(file, "%s ", filename);
+
+  FILE* hash = fopen(filename, "rb");
+  
+  SHA256_CTX sha256;
+  SHA256_Init(&sha256);
+
+  const int buffer_size = 32768;
+  unsigned char buffer[buffer_size];
+  int bytes_read = 0;
+
+  while ((bytes_read = fread(buffer, 1, buffer_size, hash))) {
+    SHA256_Update(&sha256, buffer, bytes_read);
+  }
+  unsigned char hash_sum[SHA256_DIGEST_LENGTH];
+  SHA256_Final(hash_sum, &sha256);
+  fclose(hash);
+
+  fprintf(file, "%s\n", hash_sum);
+  fclose(file);
+}
+
+// сверка с контрольным списком
+// void read_file(char* directory, char* list, char* filename) {
+//   char* line = "";
+//   FILE* list = fopen(filename, "r");
+//   fscanf(list, "%s", line);
+//   printf("%s %s\n", line, filename);
+//   fclose(list);
+// }
 
 // void checker(int regime, char* directory, char* file_list) {
 //   FILE* checklist = tmpfile();
@@ -112,25 +192,4 @@ void read_file(FILE* file, char* filename) {
 //   if (pipe != NULL) {
 
 //   }
-// }
-
-// постановка каталога на учет
-// void set_on() {
-//   system("clear");
-
-//   snprintf(command, sizeof(command), "ls %s", directory);
-//   FILE* list = fopen(filename, "w");
-//   FILE* pipe = popen(command, "r");  // выполнение команды в терминале
-//   if (pipe != NULL) {
-//     char file_path[256];  // путь до файлов
-//     // сбор строк по \n символу из pipe
-//     while (fgets(file_path, sizeof(file_path), pipe) != NULL) {
-//       char full_path[256] = "";
-//       file_path[strcspn(file_path, "\n")] = '\0';  // замена \n на \0
-//       strcat(full_path, directory);
-//       strcat(full_path, file_path);
-//       write_file(list, full_path);
-//     }
-//   }
-//   pclose(pipe);
 // }
