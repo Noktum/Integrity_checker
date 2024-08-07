@@ -3,8 +3,8 @@
 #include <string.h>
 
 void menu();
-void get_paths(int regime, char* catalog, char* filename);
-char* get_strings();
+void get_paths(int regime, char** catalog, char** filename);
+void get_strings(char** orig);
 void write_file(FILE* file, char* filename);
 
 int main() {
@@ -24,61 +24,75 @@ void menu() {
   scanf("%d", &regime);
   getchar();  // захват символа переноса строки после выбора в меню
   while (regime != 1 && regime != 2) {
-    switch (regime) {
-      case 1:
-        get_paths(regime, catalog, filename);
-        printf("%s %s\n", catalog, filename);
-        break;
-      case 2:
-        break;
-      default:
-        printf("Выберите верную опцию: 1 или 2\n");
-        scanf("%d", &regime);
-        getchar();
-        break;
-    }
+    printf("Выберите верную опцию: 1 или 2\n");
+    scanf("%d", &regime);
+    getchar();
   }
+  switch (regime) {
+    case 1:
+      get_paths(regime, &catalog, &filename);
+
+      break;
+    case 2:
+    get_paths(regime, &catalog, &filename);
+      break;
+  }
+  free(catalog);
+  free(filename);
 }
 
-void get_paths(int regime, char* catalog, char* filename) {
+void get_paths(int regime, char** catalog, char** filename) {
   if (regime == 1) {
-    printf("Введите абсолютный путь до каталога для постановки на контроль целостности:\n");
+    printf(
+        "Введите абсолютный путь до каталога для постановки на контроль "
+        "целостности:\n");
   } else if (regime == 2) {
-    printf("Введите абсолютный путь до каталога для проведения контроля целостности:\n");
+    printf(
+        "Введите абсолютный путь до каталога для проведения контроля "
+        "целостности:\n");
   }
   *catalog = get_strings();
 
   if (regime == 1) {
-    printf("Введите абсолютный путь до каталога для сохранения списка контроля целостности:\n");
+    printf(
+        "Введите абсолютный путь до каталога для сохранения списка контроля "
+        "целостности:\n");
   } else if (regime == 2) {
-    printf("Введите абсолютный путь до соответствующего списка контроля целостности:\n");
+    printf(
+        "Введите абсолютный путь до соответствующего списка контроля "
+        "целостности:\n");
   }
   *filename = get_strings();
 }
 
 // запрос пути до каталогов от пользователя
-char* get_strings() {
-  int index = 0, length = 1, capacity = 1;
+void get_strings(char** orig) {
+  int index = 0, length = 1, capacity = 1, flag = 1;
   char* path = malloc(sizeof(char) * 2);
 
   char c = getchar();
-  while (c != '\n') {
+  while (c != '\n' && flag) {
     path[index] = c;
     length++;
     index++;
     if (index + 1 == capacity) {
       capacity *= 2;
       path = realloc(path, capacity * sizeof(char) + 1);
-      // printf("!%ld\n", strlen(path));
+      if (path == (void*)0) {
+        flag = 0;
+        free(path);
+      }
     }
     c = getchar();
   }
-
-  if (path[index - 1] != '/') {
-    path[index] = '/';
+  if (flag) {
+    if (path[index - 1] != '/') {
+      path[index] = '/';
+    }
+    path[length] = '\0';
+    *orig = path;
+    path = NULL;
   }
-  path[length] = '\0';
-  return path;
 }
 
 void write_file(FILE* file, char* filename) { fprintf(file, "%s\n", filename); }
