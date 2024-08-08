@@ -4,8 +4,7 @@
 #include <string.h>
 
 void menu();
-void get_paths(int regime, char** catalog, char** file_path, char** file_name);
-char* get_fullname(char* file_path, char* file_name);
+void get_paths(int regime, char** catalog, char** file_path);
 void get_strings(char** orig);
 void processing(char* catalog, char* filename, void (*operation)(char*, char*));
 void write_file(char* list, char* filename);
@@ -21,9 +20,6 @@ void menu() {
   // system("clear");
   char* catalog = "\0";
   char* file_path = "\0";
-  char* file_name = "\0";
-  char* listname = "\0";
-  printf("%s\n", OpenSSL_version(OPENSSL_VERSION));
   printf(
       "Выберите режим работы утилиты, введя число ниже:\n1. Постановка "
       "каталога на контроль целостности.\n2. Проведение контроля целостности "
@@ -37,25 +33,22 @@ void menu() {
     scanf("%d", &regime);
     getchar();
   }
-  get_paths(regime, &catalog, &file_path, &file_name);
-  listname = get_fullname(file_path, file_name);
+  get_paths(regime, &catalog, &file_path);
   switch (regime) {
     case 1:
-      if (catalog && listname) {
-        processing(catalog, listname, write_file);
+      if (catalog && file_path) {
+        processing(catalog, file_path, write_file);
       }
       break;
     case 2:
       break;
   }
   free(catalog);
-  free(listname);
-  free(file_name);
   free(file_path);
 }
 
 // запрос и получение директорий
-void get_paths(int regime, char** catalog, char** file_path, char** file_name) {
+void get_paths(int regime, char** catalog, char** file_path) {
   if (regime == 1) {
     printf(
         "Введите абсолютный путь до каталога для постановки на контроль "
@@ -69,29 +62,14 @@ void get_paths(int regime, char** catalog, char** file_path, char** file_name) {
 
   if (regime == 1) {
     printf(
-        "Введите абсолютный путь до каталога для сохранения списка контроля "
-        "целостности:\n");
+        "Введите полный путь до места сохранения списка контроля "
+        "целостности (вместе с названием):\n");
   } else if (regime == 2) {
     printf(
-        "Введите абсолютный путь до соответствующего списка контроля "
+        "Введите полный путь до соответствующего списка контроля "
         "целостности:\n");
   }
   get_strings(file_path);
-
-  if (regime == 1) {
-    printf("Введите название для списка контроля целостности:\n");
-  } else if (regime == 2) {
-    printf("Введите название соответствующего списка контроля целостности:\n");
-  }
-  get_strings(file_name);
-}
-
-// сборка пути до списка и его названия в 1 строку
-char* get_fullname(char* file_path, char* file_name) {
-  char* temp = malloc(sizeof(char) * (strlen(file_path) + strlen(file_name)));
-  snprintf(temp, strlen(file_path) + strlen(file_name), "%s%s", file_path,
-           file_name);
-  return temp;
 }
 
 // запрос пути до каталогов от пользователя
@@ -130,9 +108,8 @@ void get_strings(char** orig) {
 void processing(char* catalog, char* filename,
                 void (*operation)(char*, char*)) {
   // system("clear");
-  char* command = (char*)malloc(sizeof(char) * (strlen(catalog) + 9));
-  snprintf(command, 8, "ls -XN ");
-  strcat(command, catalog);
+  char* command = (char*)malloc(sizeof(char) * (strlen(catalog) + 8));
+  snprintf(command, 7 + strlen(catalog), "ls -XN %s", catalog);
   FILE* pipe = popen(command, "r");  // выполнение команды в терминале
   if (pipe != NULL) {
     char file_path[256] = "\0";  // путь до файлов
