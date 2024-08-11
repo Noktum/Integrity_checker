@@ -1,9 +1,7 @@
 #include "integrity_checker.h"
 
 int main() {
-  openlog("integrity_control", LOG_CONS, LOG_SYSLOG);
   menu();
-  closelog();
   return 0;
 }
 
@@ -38,20 +36,6 @@ void menu() {
   free(catalog);
   free(list_path);
   fclose(log);
-}
-
-// запрос пути до каталогов от пользователя
-void getter(char** orig, int mode) {
-  char* string = NULL;
-  int length = 0, flag = 1;
-  stream_read(&string, &length, stdin, &flag, '\n');
-  if (string[length] != '/' && mode && flag) {
-    string[length] = '/';
-    string[length + 1] = '\0';
-  } else if (flag) {
-    string[length] = '\0';
-  }
-  *orig = string;
 }
 
 /*
@@ -158,6 +142,10 @@ void read_file(FILE* log, FILE* pipe, FILE* file, char* catalog,
                NULL &&
            stream_read(&hash_check, &length, file, &stream_flag, '\n') !=
                NULL) {
+      if (flag == 0) {
+        break;
+        break;
+      }
       char* hash = hash_generate(file_path);
       file_checker(log, &flag, list_check, hash_check, file_path, hash);
       free(hash);
@@ -166,9 +154,11 @@ void read_file(FILE* log, FILE* pipe, FILE* file, char* catalog,
     free(list_check);
     free(file_path);
     if (flag) {
-      printf("Целостность католога заверена\n");
+      printf("\nЦелостность католога заверена\n");
+      logger("info", log, "Целостность католога заверена", catalog);
     } else {
-      printf("Целостность каталога нарушена\n");
+      printf("\nЦелостность каталога нарушена\n");
+      logger("error", log, "Целостность католога нарушена", catalog);
     }
   } else if (strcmp(checker, id) != 0) {
     logger("info", log, "Неверный список контроля целостности для каталога",

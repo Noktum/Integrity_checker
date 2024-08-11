@@ -70,15 +70,20 @@ void logger(char* tag, FILE* file, char* message, char* filename) {
   time_t now;
   time(&now);
   fprintf(file, "%s [%s]: %s - %s\n", ctime(&now), tag, message, filename);
+  if (strcmp(tag, "info") == 0) {
+    syslog(LOG_INFO, "%s - %s", message, filename);
+  } else if (strcmp(tag, "error") == 0) {
+    syslog(LOG_ERR, "%s - %s", message, filename);
+  }
 }
 
 // стартовое меню
 void hello_msg() {
   system("clear");
   printf("%s", "\t\t\t\t\tIntergrity checker\n");
-  printf(
-      "Проводит постановку на учет каталогов и проверку их целостности через "
-      "генерацию хэш сумм SHA256.\n");
+  printf("Проводит постановку на учет каталогов и проверку их целостности через ");
+  printf("генерацию хэш сумм SHA256 для файлов в каталоге. При обнаружении нарушения целостности ");
+  printf("утилита завершит свою работу с соответствующим сообщением в консоль и журнал");
   printf("\t\tЧетко следуйте инструкциям для корректной работы утилиты.\n");
   printf("\nВыберите режим работы утилиты, введя число ниже:\n");
   printf("1. Постановка каталога на контроль целостности.\n");
@@ -98,11 +103,25 @@ void get_paths(int regime, char** catalog, char** list_path) {
 
   if (regime == 1) {
     printf("\nВведите полный путь до места сохранения списка контроля ");
-    printf("целостности\n(вместе с названием .txt). Если файл существует,\n");
+    printf("целостности\n(вместе с названием .txt). Если файл существует, ");
     printf("то он будет перезаписан:\n");
   } else if (regime == 2) {
     printf("\nВведите полный путь до соответствующего списка контроля ");
     printf("целостности (вместе с названием .txt):\n");
   }
   getter(list_path, 0);
+}
+
+// запрос пути до каталогов от пользователя
+void getter(char** orig, int mode) {
+  char* string = NULL;
+  int length = 0, flag = 1;
+  stream_read(&string, &length, stdin, &flag, '\n');
+  if (string[length] != '/' && mode && flag) {
+    string[length] = '/';
+    string[length + 1] = '\0';
+  } else if (flag) {
+    string[length] = '\0';
+  }
+  *orig = string;
 }
