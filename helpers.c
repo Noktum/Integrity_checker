@@ -3,7 +3,6 @@
 // генератор хеша для поданного файла (пути до него)
 char* hash_generate(char* file) {
   FILE* temp = fopen(file, "rb");  // открытие файла на бинарное чтение
-
   char* string = NULL;
   size_t bufferSize = 0;
   FILE* myStream = open_memstream(
@@ -16,7 +15,7 @@ char* hash_generate(char* file) {
 
   // всякое для чтения из файла (сколько и куда читаем)
   const int buffer_size = 32768;
-  unsigned char buffer[buffer_size];
+  char buffer[buffer_size];
   int bytes_read = 0;
 
   while ((bytes_read = fread(buffer, 1, buffer_size, temp))) {
@@ -29,6 +28,7 @@ char* hash_generate(char* file) {
     fprintf(myStream, "%02x",
             hash[i]);  // перепечатываем хэш в адекватную строку
   }
+
   EVP_MD_CTX_free(sha256);
   fclose(myStream);
   fclose(temp);
@@ -83,4 +83,26 @@ void hello_msg() {
   printf("\nВыберите режим работы утилиты, введя число ниже:\n");
   printf("1. Постановка каталога на контроль целостности.\n");
   printf("2. Проведение контроля целостности каталога.\n");
+}
+
+// запрос и получение директорий
+void get_paths(int regime, char** catalog, char** list_path) {
+  if (regime == 1) {
+    printf("\nВведите абсолютный путь до каталога для постановки на контроль ");
+    printf("целостности\n(начиная с домашней директории):\n");
+  } else if (regime == 2) {
+    printf("\nВведите абсолютный путь до каталога для проведения контроля ");
+    printf("целостности\n(начиная с домашней директории):\n");
+  }
+  getter(catalog, 1);
+
+  if (regime == 1) {
+    printf("\nВведите полный путь до места сохранения списка контроля ");
+    printf("целостности\n(вместе с названием .txt). Если файл существует,\n");
+    printf("то он будет перезаписан:\n");
+  } else if (regime == 2) {
+    printf("\nВведите полный путь до соответствующего списка контроля ");
+    printf("целостности (вместе с названием .txt):\n");
+  }
+  getter(list_path, 0);
 }

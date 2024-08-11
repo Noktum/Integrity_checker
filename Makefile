@@ -11,7 +11,7 @@ check:
 	clang-format -i *.c
 	cppcheck --enable=all --suppress=missingIncludeSystem main.c
 
-valgrind:
+valgrind: clear
 	$(GCC) main.c hashes.c -o programm $(LIBS)
 	valgrind --tool=memcheck --leak-check=yes --track-origins=yes --leak-check=full --show-leak-kinds=all -s ./programm 
 
@@ -20,4 +20,4 @@ sanit:
 	./programm
 
 clear:
-	rm programm test_folder.txt
+	rm programm
