@@ -11,11 +11,11 @@ check:
 	clang-format -i *.c
 	cppcheck --enable=all --suppress=missingIncludeSystem main.c
 
-valgrind: clear
+valgrind:
 	$(GCC) main.c hashes.c -o programm $(LIBS)
-	valgrind --tool=memcheck --leak-check=yes --track-origins=yes ./programm 
+	valgrind --tool=memcheck --leak-check=yes --track-origins=yes --leak-check=full --show-leak-kinds=all -s ./programm 
 
-sanit: clear
+sanit:
 	$(GCC) $(SANITIZE) main.c hashes.c -o programm $(LIBS)
 	./programm
 

@@ -1,31 +1,22 @@
 #include "integrity_checker.h"
 
 int main() {
-  openlog("integrity_control", LOG_CONS, LOG_LOCAL1);
+  openlog("integrity_control", LOG_CONS, LOG_SYSLOG);
   menu();
   closelog();
   return 0;
 }
 
-void hello_msg() {
-  system("clear");
-  printf("%s", "\t\t\t\t\tIntergrity checker\nПроводит постановку на учет каталогов и проверку их целостности через генерацию хэш сумм SHA256.\n");
-  printf("\t\tЧетко следуйте инструкциям для корректной работы утилиты.\n");
-  printf("\nВыберите режим работы утилиты, введя число ниже:\n");
-  printf("1. Постановка каталога на контроль целостности.\n");
-  printf("2. Проведение контроля целостности каталога.\n");
-}
-
 // меню
 void menu() {
+  FILE* log = fopen("journal.log", "a");
   char* catalog = "\0";
   char* list_path = "\0";
   hello_msg();
   int regime = 0;
   scanf("%d", &regime);
   getchar();  // захват символа переноса строки после выбора в меню
-  // если ввели букву или неверное число
-  while (regime != 1 && regime != 2) {
+  while (regime != 1 && regime != 2) {  // если ввели букву или неверное число
     printf("Выберите верную опцию: 1 или 2\n");
     scanf("%d", &regime);
     getchar();
@@ -34,15 +25,22 @@ void menu() {
 
   switch (regime) {
     case 1:
+      logger("info", log, "Начало постановки на контроль целостности каталога",
+             catalog);
       if (catalog && list_path) {
-        processing(catalog, list_path, write_file, "w");
+        processing(log, catalog, list_path, write_file, "w");
       }
       break;
     case 2:
+      logger("info", log, "Начало проверки целостности каталога", catalog);
+      if (catalog && list_path) {
+        processing(log, catalog, list_path, read_file, "r");
+      }
       break;
   }
   free(catalog);
   free(list_path);
+  fclose(log);
 }
 
 // запрос и получение директорий
@@ -104,30 +102,30 @@ void getter(char** orig, int mode) {
 }
 
 // обработка каталога
-void processing(char* catalog, char* listname, void (*operation)(FILE*, char*),
-                char* regime) {
-  // system("clear");
+void processing(FILE* log, char* catalog, char* listname,
+                void (*operation)(FILE*, FILE*, FILE*, char*, char*), char* regime) {
   char* command = malloc(sizeof(char) * (strlen(catalog) + 8));
   snprintf(command, 8 + strlen(catalog), "ls -XN %s", catalog);
   FILE* pipe = popen(command, "r");  // выполнение команды в терминале
   FILE* file = fopen(listname, regime);
   char* checker = gen_check(catalog);
-  fprintf(file, "%s\n", checker);
-  if (pipe != NULL) {
-    char file_path[256] = "\0";  // путь до файлов
-    while (fgets(file_path, sizeof(file_path), pipe) != NULL) {
-      file_path[strcspn(file_path, "\n")] = '\0';  // замена \n на \0
-      char* full_path = to_full_path(catalog, file_path);
-      operation(file, full_path);
-      free(full_path);
-    }
+
+  if (file_check(listname) == 0) {
+    logger("info", log,
+           "Ошибка при создании/чтении списка контроля целостности", listname);
+    free(command);
+    free(checker);
+    pclose(pipe);
+  } else {
+    operation(log, pipe, file, catalog, checker);
+    free(command);
+    free(checker);
+    pclose(pipe);
+    fclose(file);
   }
-  free(command);
-  free(checker);
-  pclose(pipe);
-  fclose(file);
 }
 
+// объекдинение каталога и имени файла в 1 строку
 char* to_full_path(char* catalog, char* file_path) {
   char* full_path =
       malloc(sizeof(char) * (strlen(catalog) + strlen(file_path) + 1));
@@ -136,10 +134,81 @@ char* to_full_path(char* catalog, char* file_path) {
   return full_path;
 }
 
-// создание контрольного списка
-void write_file(FILE* file, char* filename) {
-  fprintf(file, "%s ", filename);
-  char* hash = hash_generate(filename);
-  fprintf(file, "%s\n", hash);
-  free(hash);
+// запись строки в контрольный файл
+void write_file(FILE* log, FILE* pipe, FILE* file, char* catalog,
+                char* checker) {
+  fprintf(file, "%s\n", checker);
+  if (pipe) {
+    char* file_path =
+        malloc(sizeof(char) * strlen(catalog) * 2);  // путь до файлов
+    while (fscanf(pipe, "%s", file_path) != EOF) {
+      char* full_path = to_full_path(catalog, file_path);
+      fprintf(file, "%s ", full_path);
+      char* hash = hash_generate(full_path);
+      fprintf(file, "%s\n", hash);
+      logger("info", log, "В список контроля целостности внесен файл",
+             full_path);
+      free(hash);
+      free(full_path);
+    }
+    free(file_path);
+  }
+}
+
+void read_file(FILE* log, FILE* pipe, FILE* file, char* catalog,
+               char* checker) {
+  char* id = malloc(sizeof(char) * 70);
+  fscanf(file, "%s", id);
+  if (strcmp(checker, id) == 0 && pipe != NULL) {
+    int flag = 1;
+    char* file_path = malloc(sizeof(char) * strlen(catalog) * 2);
+    char* list_check = malloc(sizeof(char) * strlen(catalog) * 2);
+    char* hash_check = malloc(sizeof(char) * 70);
+    while (fscanf(pipe, "%s", file_path) != EOF &&
+           fscanf(file, "%s %s", list_check, hash_check) != EOF) {
+      char* full_path = to_full_path(catalog, file_path);
+      if (strcmp(full_path, list_check) != 0) {
+        logger("error", log, "Удален или добавлен новый файл в каталог",
+               full_path);
+        flag = 0;
+        break;
+      }
+      char* hash = hash_generate(full_path);
+      if (strcmp(hash, hash_check) != 0) {
+        logger("error", log, "Изменен файл", full_path);
+        flag = 0;
+      }
+      free(hash);
+      free(full_path);
+    }
+    free(hash_check);
+    free(list_check);
+    free(file_path);
+    if (flag) {
+      printf("Целостность католога заверена\n");
+    } else {
+      printf("Целостность каталога нарушена\n");
+    }
+  } else if (strcmp(checker, id) != 0) {
+    logger("info", log, "Неверный список контроля целостности для каталога",
+           catalog);
+  }
+  free(id);
+}
+
+int file_check(char* listname) {
+  int length = strlen(listname), flag = 1;
+  if (listname[length - 1] != 't' || listname[length - 2] != 'x' ||
+      listname[length - 3] != 't' || listname[length - 4] != '.') {
+    flag = 0;
+  }
+  if (flag) {
+    FILE* file = fopen(listname, "r");
+    if (!file) {
+      flag = 0;
+    } else {
+      fclose(file);
+    }
+  }
+  return flag;
 }

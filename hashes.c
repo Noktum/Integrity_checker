@@ -64,3 +64,23 @@ char* gen_check(char* catalog) {
   free(control);
   return string;
 }
+
+// запись логов в файл
+void logger(char* tag, FILE* file, char* message, char* filename) {
+  time_t now;
+  time(&now);
+  fprintf(file, "%s [%s]: %s - %s\n", ctime(&now), tag, message, filename);
+}
+
+// стартовое меню
+void hello_msg() {
+  system("clear");
+  printf("%s", "\t\t\t\t\tIntergrity checker\n");
+  printf(
+      "Проводит постановку на учет каталогов и проверку их целостности через "
+      "генерацию хэш сумм SHA256.\n");
+  printf("\t\tЧетко следуйте инструкциям для корректной работы утилиты.\n");
+  printf("\nВыберите режим работы утилиты, введя число ниже:\n");
+  printf("1. Постановка каталога на контроль целостности.\n");
+  printf("2. Проведение контроля целостности каталога.\n");
+}
