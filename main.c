@@ -50,11 +50,11 @@ char* stream_read(char** string, int* lenght, FILE* stream, int* flag,
   char c = fgetc(stream);
   if (c == '\n') {
     line[0] = '\0';
-  } else if (c == EOF) {
+  } else if (c == (char)EOF) {
     free(line);
     line = NULL;
   }
-  for (i = 0; *flag && c != delim && c != EOF; i++) {
+  for (i = 0; *flag && c != delim && c != (char)EOF; i++) {
     (*lenght)++;
     line[i] = c;
     if (i + 1 == capacity) {
@@ -143,7 +143,6 @@ void read_file(FILE* log, FILE* pipe, FILE* file, char* catalog,
            stream_read(&hash_check, &length, file, &stream_flag, '\n') !=
                NULL) {
       if (flag == 0) {
-        break;
         break;
       }
       char* hash = hash_generate(file_path);
